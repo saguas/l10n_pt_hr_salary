@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include l10n_pt_hr_salary *.css
+recursive-include l10n_pt_hr_salary *.csv
+recursive-include l10n_pt_hr_salary *.html
+recursive-include l10n_pt_hr_salary *.ico
+recursive-include l10n_pt_hr_salary *.js
+recursive-include l10n_pt_hr_salary *.json
+recursive-include l10n_pt_hr_salary *.md
+recursive-include l10n_pt_hr_salary *.png
+recursive-include l10n_pt_hr_salary *.py
+recursive-include l10n_pt_hr_salary *.svg
+recursive-include l10n_pt_hr_salary *.txt
+recursive-exclude l10n_pt_hr_salary *.pyc
