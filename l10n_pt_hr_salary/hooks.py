@@ -14,8 +14,8 @@ app_version = "0.0.1"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/l10n_pt_hr_salary/css/l10n_pt_hr_salary.css"
-app_include_js = ["/assets/l10n_pt_hr_salary/js/nunjucks.min.js", "/assets/l10n_pt_hr_salary/js/pt_salary_structure.js"]
+app_include_css = ["/assets/l10n_pt_hr_salary/css/bootstrap-tagsinput.css"]
+app_include_js = ["/assets/l10n_pt_hr_salary/js/bootstrap-tagsinput.min.js", "/assets/l10n_pt_hr_salary/js/pt_salary_structure.js"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/l10n_pt_hr_salary/css/l10n_pt_hr_salary.css"

@@ -6,7 +6,12 @@ import frappe, json
 from frappe import _
 from frappe.utils import cint, flt, rounded
 from jinja2 import Environment, Template, contextfunction
+from frappe.exceptions import ValidationError
 
+
+
+class TaxDependencyError(ValidationError):
+	http_status_code = 417
 
 
 def set_functions_context(env):
@@ -14,7 +19,13 @@ def set_functions_context(env):
 	env.globals.update({"get_field_value":get_document_field})
 	#env.globals.update({"get_from_sql":get_doctype_document_sql})
 	env.globals.update({"get_from_date":get_from_date})
+	env.globals.update({"raise":raise_helper})
 	#env.globals.update({"check_ciclo": check_ciclo})
+
+
+@contextfunction
+def raise_helper(ctx, msg):
+	return frappe.throw(_(msg), exc=TaxDependencyError)
 
 @contextfunction
 def get_from_date(ctx, date, dformat="%Y-%m-%d", what="year"):
@@ -36,12 +47,16 @@ def get_document_field(ctx, doctype, docname, field):
 	print "get field %s value %s" % (doctype, field_value)
 	return field_value
 
+
 @contextfunction
 def get_irs_tax(ctx, ordenado, doctype, docname, field):
+	from l10n_pt_hr_salary.tasks import publish
 	sql = """
-		select remuneracao, `%(field)s` from `tab%(parent_doctype)s` where parent = '%(docname)s' and remuneracao >= %(ordenado)s order by remuneracao ASC LIMIT 1;
+		select remuneracao, `%(field)s` from `tab%(parent_doctype)s` where parent = '%(docname)s' and remuneracao >= %(ordenado)s
+		or remuneracao = (select max(remuneracao) from `tab%(parent_doctype)s` where parent = '%(docname)s') order by remuneracao ASC LIMIT 1;
 	""" % ({"field":field, "parent_doctype": doctype, "docname": docname, "ordenado": ordenado})
 	res = frappe.db.sql(sql)
+
 	return res[0][1]
 
 
@@ -51,9 +66,21 @@ def check_ciclo(ctx, ordenado):
 	print "get field ordenado %s" %(ordenado)
 
 
+reg = False
+
 @frappe.whitelist()
 def calculate_earnings_description(doc):
+	from l10n_pt_hr_salary.tasks import run_async_task, subscribe, publish, get_messages
 
+	#p.subscribe(**{'my-channel': my_handler})
+	#subscribe("teste_channel")
+	global reg
+	if not reg:
+		run_async_task(frappe.local.site)
+		reg = True
+	#subscribe(**{'teste_channel': teste_pubsub})
+	#publish("teste_channel", "ola saguas")
+	#print "get_messages %s " % get_messages()
 	iliquid = 0
 	tributavel = 0
 
@@ -169,6 +196,9 @@ def make_deduction(doc_salary, doc_type, doc_struct, context, result_description
 	if not result_description.get("deductions"):
 		result_description["deductions"] = []
 
+	if not doc_struct.d_modified_amt:
+		doc_struct.d_modified_amt = 0
+
 	if not tributavel_calcule:
 		tributavel_value = rounded(doc_struct.d_modified_amt, precision)
 		res = {"idx": doc_struct.idx, "d_modified_amt": tributavel_value}
@@ -214,6 +244,8 @@ def make_deduction(doc_salary, doc_type, doc_struct, context, result_description
 		result_description.get("deductions").append(res)
 		print "short_name %s res %s idx %s tributavel_value %s" % (doc_type_dict.short_name, context.get(doc_type_dict.short_name), doc_struct.idx, tributavel_value)
 		return tributavel_value
+	except TaxDependencyError:
+		pass
 	except:
 		d_type = frappe.utils.encode(doc_struct.d_type)
 		frappe.throw(_("Error in rule for Earning Type {}. Please check jinja2 syntax.".format(d_type)))

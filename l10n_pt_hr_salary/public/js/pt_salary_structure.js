@@ -1,6 +1,27 @@
 var iliquid = 0;
 var iliquid_tribut = null;
 
+
+
+
+frappe.ui.form.on("Deduction Type", "onload", function(frm, doctype, name){
+
+	console.log("Deduction Type Load ", frm.doc, doctype, $("[data-fieldname='d_depends']"));
+	$("input[data-fieldname='d_depends']").attr("data-role",'tagsinput')
+
+});
+
+
+frappe.ui.form.on("Deduction Type", "refresh", function(frm, doctype, name){
+
+	console.log("Deduction Type refresh ", frm.doc, doctype, $("[data-fieldname='d_depends']"));
+	$("input[data-fieldname='d_depends']").attr("data-role",'tagsinput')
+
+});
+
+
+//earnings
+
 frappe.ui.form.on("Salary Structure Earning", "earnings_remove", function(frm, doctype, name){
 
 	console.log("remove salary structure earning ", frm.doc, doctype, frm.doc.earnings.length);
@@ -9,8 +30,6 @@ frappe.ui.form.on("Salary Structure Earning", "earnings_remove", function(frm, d
 
 });
 
-
-//earnings
 frappe.ui.form.on("Salary Structure", "earnings_on_form_rendered", function(frm, doctype, name){
 
 	//get_regexp_if_expression("$if(game=teste)");
@@ -71,6 +90,25 @@ frappe.ui.form.on("Salary Structure", "deductions_on_form_rendered", function(fr
 });
 
 
+frappe.ui.form.on("Salary Structure Deduction", "d_type", function(frm, doctype, name){
+	console.log("Salary Structure Deduction ", doctype);
+	var row = locals[doctype][name];
+	row.modified_value = undefined;
+	if (row.d_type && row.d_type !== ""){
+		grid_from_open(frm, doctype, name, "Deduction Type", 'deductions');
+	}
+});
+
+
+frappe.ui.form.on("Salary Structure Deduction", "deductions_remove", function(frm, doctype, name){
+
+	console.log("remove salary structure deduction ", frm.doc, doctype, frm.doc.earnings.length);
+	//if (cur_frm.cur_grid.fields_dict.e_type.value && cur_frm.cur_grid.fields_dict.e_type.value !== "")
+	calculate_iliquid_tributavel_value(frm.doc, doctype);
+
+});
+
+
 //Utils
 
 var grid_from_open = function(frm, doctype, name, table_doctype, table_name){
@@ -83,9 +121,25 @@ var grid_from_open = function(frm, doctype, name, table_doctype, table_name){
 }
 
 
+var depend_on_lwp = function(doc, row, table_field){
+
+	cur_frm.cur_grid.fields_dict.depend_on_lwp["df"].read_only = 1;
+	if(cint(doc.depend_on_lwp) == 1){
+		row.depend_on_lwp = 1;
+	}else{
+		row.depend_on_lwp = 0;
+	}
+
+	refresh_field('depend_on_lwp', row.name, table_field);
+
+}
+
+
 var hide_show_fields_deductions = function(doc, row, dt, dn, table_field){
 
 	depend_on_lwp(doc, row, table_field);
+
+	cur_frm.cur_grid.fields_dict.d_modified_amt["df"].read_only = 1;
 
 	if (doc.deduction_type === "Percentage"){
 		cur_frm.cur_grid.fields_dict.percent.toggle(1);
@@ -107,21 +161,8 @@ var hide_show_fields_deductions = function(doc, row, dt, dn, table_field){
 	}else{
 		cur_frm.cur_grid.fields_dict.percent.toggle(0);
 		cur_frm.cur_grid.fields_dict.modified_value_percent.toggle(0);
+		cur_frm.cur_grid.fields_dict.d_modified_amt["df"].read_only = 0;
 	}
-
-}
-
-
-var depend_on_lwp = function(doc, row, table_field){
-
-	cur_frm.cur_grid.fields_dict.depend_on_lwp["df"].read_only = 1;
-	if(cint(doc.depend_on_lwp) == 1){
-		row.depend_on_lwp = 1;
-	}else{
-		row.depend_on_lwp = 0;
-	}
-
-	refresh_field('depend_on_lwp', row.name, table_field);
 
 }
 
@@ -135,7 +176,9 @@ var hide_show_fields_earnings = function(doc, row, dt, dn, table_field){
 		cur_frm.cur_grid.fields_dict.modified_value_diary.toggle(1);
 		row.diary_earning_ = 1;
 		cur_frm.cur_grid.fields_dict.diary_earning_["df"].read_only = 1;
-		cur_frm.cur_grid.fields_dict.modified_value["df"].read_only = 1;
+		if (cur_frm.cur_grid.fields_dict.modified_value)
+			cur_frm.cur_grid.fields_dict.modified_value["df"].read_only = 1;
+		//cur_frm.cur_grid.fields_dict.d_modified_amt && cur_frm.cur_grid.fields_dict.d_modified_amt["df"].read_only = 1;
 		refresh_field('diary_earning_', row.name, table_field);
 		refresh_field('modified_value_diary', row.name, table_field);
 		//refresh_field('modified_value_diary', row.name, table_field);
@@ -144,7 +187,9 @@ var hide_show_fields_earnings = function(doc, row, dt, dn, table_field){
 	}else{
 		cur_frm.cur_grid.fields_dict.diary_earning_.toggle(0);
 		cur_frm.cur_grid.fields_dict.modified_value_diary.toggle(0);
-		cur_frm.cur_grid.fields_dict.modified_value["df"].read_only = 0;
+		if (cur_frm.cur_grid.fields_dict.modified_value)
+			cur_frm.cur_grid.fields_dict.modified_value["df"].read_only = 0;
+		//cur_frm.cur_grid.fields_dict.d_modified_amt && cur_frm.cur_grid.fields_dict.d_modified_amt["df"].read_only = 0;
 	}
 
 }
@@ -156,6 +201,10 @@ var get_child_doc = function(doc, row, dt, dn, table_field){
 		//console.log("hide_show ", dt, dn, child_doc);
 		if (table_field === "earnings"){
 			hide_show_fields_earnings(child_doc, row, dt, dn, table_field);
+			calculate_earnings(doc, child_doc, row, dt, dn, table_field);
+		}else if (table_field === "deductions"){
+			hide_show_fields_earnings(child_doc, row, dt, dn, table_field);
+			hide_show_fields_deductions(child_doc, row, dt, dn, table_field);
 			calculate_earnings(doc, child_doc, row, dt, dn, table_field);
 		}else{
 			hide_show_fields_deductions(child_doc, row, dt, dn, table_field);
@@ -220,4 +269,3 @@ var call_server_func = function(method, args, callback){
      });
 
 }
-

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import frappe
+
+
 """
 @frappe.whitelist()
 def calculate_earnings_description_old(earn_docs):
